@@ -67,6 +67,18 @@ PIMAGE_SECTION_HEADER get_last_section_header (PUCHAR file) {
 	return pish;
 }
 
+BOOL check_valid_file (PUCHAR file) {
+	PIMAGE_DOS_HEADER pidh = get_dos_header (file);
+	PIMAGE_NT_HEADERS pinh = get_pe_header (file);
+
+	if (pidh->e_magic != IMAGE_DOS_SIGNATURE || 
+		pinh->Signature != IMAGE_NT_SIGNATURE) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static BOOL check_available_space (PIMAGE_SECTION_HEADER pish, SIZE_T num_sections) {
 	// get first section offset
 	DWORD first_section_offset = pish->PointerToRawData;

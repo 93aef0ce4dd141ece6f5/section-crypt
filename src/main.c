@@ -117,6 +117,13 @@ int main (int argc, char *argv[]) {
 	CloseHandle (hTargetFile);
 	free (target_file);
 
+	if (check_valid_file (file_buf) == FALSE) {
+		free (file_buf);
+		CloseHandle (hCryptedFile);
+		free (crypted_file);
+		die ("Invalid input file");
+	}
+
 	if (add_new_section (file_buf, NAME, CHARACTERISTICS) == FALSE) {
 		free (file_buf);
 		CloseHandle (hCryptedFile);

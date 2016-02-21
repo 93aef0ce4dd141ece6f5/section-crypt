@@ -5,6 +5,7 @@
 VOID print_debug (LPCSTR, ...);
 
 // crypt.c
+BOOL check_valid_file (PUCHAR);
 // extract headers from target file
 PIMAGE_DOS_HEADER get_dos_header (PUCHAR);
 PIMAGE_NT_HEADERS get_pe_header (PUCHAR);
