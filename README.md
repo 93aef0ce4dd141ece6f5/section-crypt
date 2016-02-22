@@ -1,6 +1,6 @@
 # section-crypt  
   
-Proof of Concept code for encrypting the code section on disk then decrypting it on runtime and jumping to orignal entry point  
+Proof of Concept code for encrypting the code section on disk then decrypting it on runtime and jumping to original entry point using a new section  
   
 How-To: Using Windows executable:  
 Usage: crypt.exe [FILE TO BE CRYPTED] [OUTFILE FILE]  
