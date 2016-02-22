@@ -30,7 +30,7 @@
 
 #include "Crypt.h"
 
-#define NAME            ".dtm"
+#define NAME            ".dtm\0\0\0"
 #define CHARACTERISTICS IMAGE_SCN_MEM_EXECUTE | \
                         IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_CODE
 
