@@ -31,8 +31,17 @@
 
 #include "Crypt.h"
 
+/*
+ * this is the key
+ */
 UCHAR key[] = {0x0C, 0xA4, 0xF9, 0x16, 0xCA, 0x51};
 
+/*
+ * this is the assembler routine
+ * to decrypt the .text section
+ * and then jump to the original
+ * entry point (OEP)
+ */
 UCHAR loader[] = {
                 0x8D, 0x05, 0x00, 0x00, 0x00, 0x00,     // lea  eax, .text address
                 0x8D, 0x98, 0x00, 0x00, 0x00, 0x00,     // lea  ebx, [eax+SizeOfRawData]
@@ -53,34 +62,55 @@ UCHAR loader[] = {
                 0x0C, 0xA4, 0xF9, 0x16, 0xCA, 0x51      // key array
                 };
 
+/*
+ * this function returns the DOS
+ * header of the file
+ */
 PIMAGE_DOS_HEADER get_dos_header (PUCHAR file) {
     return (PIMAGE_DOS_HEADER)file;
 }
 
+/*
+ * returns the PE header
+ */
 PIMAGE_NT_HEADERS get_pe_header (PUCHAR file) {
     PIMAGE_DOS_HEADER pidh = get_dos_header (file);
 
     return (PIMAGE_NT_HEADERS)((DWORD)pidh + pidh->e_lfanew);
 }
 
+/*
+ * returns the file header
+ */
 PIMAGE_FILE_HEADER get_file_header (PUCHAR file) {
     PIMAGE_NT_HEADERS pinh = get_pe_header (file);
 
     return (PIMAGE_FILE_HEADER)&pinh->FileHeader;
 }
 
+/*
+ * returns the optional header
+ */
 PIMAGE_OPTIONAL_HEADER get_optional_header (PUCHAR file) {
     PIMAGE_NT_HEADERS pinh = get_pe_header (file);
 
     return (PIMAGE_OPTIONAL_HEADER)&pinh->OptionalHeader;
 }
 
+/*
+ * returns the first section's header
+ * AKA .text or the code section
+ */
 PIMAGE_SECTION_HEADER get_first_section_header (PUCHAR file) {
     PIMAGE_NT_HEADERS pinh = get_pe_header (file);
 
     return (PIMAGE_SECTION_HEADER)IMAGE_FIRST_SECTION(pinh);
 }
 
+/*
+ * returns a pointer to the last
+ * section's header
+ */
 PIMAGE_SECTION_HEADER get_last_section_header (PUCHAR file) {
     PIMAGE_FILE_HEADER pifh = get_file_header (file);
     PIMAGE_SECTION_HEADER pish = get_first_section_header (file);
@@ -91,6 +121,11 @@ PIMAGE_SECTION_HEADER get_last_section_header (PUCHAR file) {
     return pish;
 }
 
+/*
+ * checks if the given file has a 
+ * valid DOS and PE signature
+ * to test if it's an exe file
+ */
 BOOL check_valid_file (PUCHAR file) {
     PIMAGE_DOS_HEADER pidh = get_dos_header (file);
     PIMAGE_NT_HEADERS pinh = get_pe_header (file);
@@ -103,6 +138,10 @@ BOOL check_valid_file (PUCHAR file) {
     return TRUE;
 }
 
+/*
+ * checks if there's enough space for 
+ * a new section header
+ */
 static BOOL check_available_space (PIMAGE_SECTION_HEADER pish, SIZE_T num_sections) {
     // get first section offset
     DWORD first_section_offset = pish->PointerToRawData;
@@ -119,10 +158,21 @@ static BOOL check_available_space (PIMAGE_SECTION_HEADER pish, SIZE_T num_sectio
     return TRUE;
 }
 
+/*
+ * applies file and section alignment
+ * for the section header values
+ */
 static DWORD align (DWORD address, DWORD section_alignment) {
+    /*
+     * rounds up to the next alignment
+     */
     return ((address + section_alignment - 1) / section_alignment) * section_alignment;
 }
 
+/*
+ * adds a new section header and
+ * sets the appropriate values
+ */
 BOOL add_new_section (PUCHAR file, LPCSTR name, DWORD characteristics) {
     PIMAGE_FILE_HEADER pifh = get_file_header (file);
     PIMAGE_OPTIONAL_HEADER pioh = get_optional_header (file);
@@ -131,7 +181,11 @@ BOOL add_new_section (PUCHAR file, LPCSTR name, DWORD characteristics) {
     DWORD section_alignment = pioh->SectionAlignment;
     DWORD file_alignment = pioh->FileAlignment;
 
-    DWORD section_size = sizeof (loader) + sizeof (DWORD);
+    /*
+     * this is the size of the data in
+     * our new section
+     */
+    DWORD section_size = sizeof (loader);
 
     print_debug ("Checking space for new section");
     // check if there is space for a new section
@@ -140,6 +194,10 @@ BOOL add_new_section (PUCHAR file, LPCSTR name, DWORD characteristics) {
         return FALSE;
     }
 
+    /* 
+     * get pointer to the new section's
+     * header and then set the new values
+     */
     PIMAGE_SECTION_HEADER new_pish = (PIMAGE_SECTION_HEADER)((DWORD)pish + 
                                     sizeof (IMAGE_SECTION_HEADER));
     print_debug ("New section header \"%s\" at address 0x%08x", name, new_pish);
@@ -173,6 +231,11 @@ BOOL add_new_section (PUCHAR file, LPCSTR name, DWORD characteristics) {
     return TRUE;
 }
 
+/*
+ * a function to print an int
+ * into a 4-byte array in 
+ * little endian
+ */
 static VOID int_to_array (PUCHAR array, DWORD integer, DWORD start) {
     array[start] = integer & 0xFF;
     array[start + 1] = (integer >> 8) & 0xFF;
@@ -180,9 +243,21 @@ static VOID int_to_array (PUCHAR array, DWORD integer, DWORD start) {
     array[start + 3] = (integer >> 24) & 0xFF;
 }
 
+/*
+ * modifies the entry point so the 
+ * code starts at our new section's
+ * routine before jumping back to 
+ * the OEP
+ */
 VOID redirect_entry_point (PUCHAR file) {
     PIMAGE_OPTIONAL_HEADER pioh = get_optional_header (file);
     PIMAGE_SECTION_HEADER pish = get_first_section_header (file);
+
+    /*
+     * makes the code section writeable
+     * this is crucial so that our routine 
+     * is able to decrypt the code section
+     */
     pish->Characteristics |= IMAGE_SCN_MEM_WRITE;
 
     // save original entry point
@@ -194,6 +269,10 @@ VOID redirect_entry_point (PUCHAR file) {
     // get address of .text section
     DWORD code_address = pish->VirtualAddress + pioh->ImageBase;
 
+    /*
+     * the last section should be our
+     * new section
+     */
     pish = get_last_section_header (file);
 
     // adjust address of entry point to beginning of new section
@@ -227,11 +306,23 @@ static VOID crypt_code (PUCHAR file, SIZE_T size) {
     }
 }
 
+/*
+ * obfuscates the code section and 
+ * writes the loader into our new
+ * section and then writes it to
+ * our new crypted file
+ */
 BOOL write_to_new_section (HANDLE hFile, PUCHAR file) {
     PIMAGE_SECTION_HEADER first_pish = get_first_section_header (file);
     // last section should be new section
     PIMAGE_SECTION_HEADER new_pish = get_last_section_header (file);
 
+    /* 
+     * we need to get the new size of 
+     * the file which includes the size
+     * of our loader and the 0-byte padded
+     * size of the new section
+     */
     DWORD new_file_size = new_pish->PointerToRawData + new_pish->SizeOfRawData;
 
     file = realloc (file, new_file_size);
@@ -239,17 +330,31 @@ BOOL write_to_new_section (HANDLE hFile, PUCHAR file) {
         return FALSE;
     }
 
+    /*
+     * first fill and pad the new section
+     */
     print_debug ("Writing to file offset: 0x%08x", new_pish->PointerToRawData);
     memset ((file + new_pish->PointerToRawData), 0, new_pish->SizeOfRawData);
 
+    /*
+     * obfuscate the code section
+     */
     print_debug ("Obfuscating file: 0x%08x bytes", first_pish->SizeOfRawData);
     crypt_code (file, first_pish->SizeOfRawData);
 
+    /*
+     * write the loader into our new
+     * section
+     */
     print_debug ("Injecting loader to: 0x%08x", file + new_pish->PointerToRawData);
     memcpy ((file + new_pish->PointerToRawData), loader, sizeof (loader));
 
     DWORD nWritten = 0;
 
+    /*
+     * write everything to the new
+     * crypted file
+     */
     print_debug ("Writing to file");
     if (WriteFile (hFile, file, new_file_size, &nWritten, NULL) == FALSE) {
         return FALSE;
